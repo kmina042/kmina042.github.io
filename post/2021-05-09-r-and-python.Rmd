@@ -64,7 +64,7 @@ y=np.random.normal(0,1,100)
 plt.scatter(x,y)
 ```
 
-Here we can do a ggplot with R too.![](/post/2021-05-09-r-and-python_files/randpython.jpg)
+Here we can do a ggplot with R too.
 
 ```{R}
 library(ggplot2)

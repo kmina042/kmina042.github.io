@@ -19,16 +19,5 @@ R:
 names(knitr::knit_engines$get()) ## [1] &amp;quot;awk&amp;quot; &amp;quot;bash&amp;quot; &amp;quot;coffee&amp;quot; &amp;quot;gawk&amp;quot; &amp;quot;groovy&amp;quot; ## [6] &amp;quot;haskell&amp;quot; &amp;quot;lein&amp;quot; &amp;quot;mysql&amp;quot; &amp;quot;node&amp;quot; &amp;quot;octave&amp;quot; ## [11] &amp;quot;perl&amp;quot; &amp;quot;psql&amp;quot; &amp;quot;Rscript&amp;quot; &amp;quot;ruby&amp;quot; &amp;quot;sas&amp;quot; ## [16] &amp;quot;scala&amp;quot; &amp;quot;sed&amp;quot; &amp;quot;sh&amp;quot; &amp;quot;stata&amp;quot; &amp;quot;zsh&amp;quot; ## [21] &amp;quot;highlight&amp;quot; &amp;quot;Rcpp&amp;quot; &amp;quot;tikz&amp;quot; &amp;quot;dot&amp;quot; &amp;quot;c&amp;quot; ## [26] &amp;quot;cc&amp;quot; &amp;quot;fortran&amp;quot; &amp;quot;fortran95&amp;quot; &amp;quot;asy&amp;quot; &amp;quot;cat&amp;quot; ## [31] &amp;quot;asis&amp;quot; &amp;quot;stan&amp;quot; &amp;quot;block&amp;quot; &amp;quot;block2&amp;quot; &amp;quot;js&amp;quot; ## [36] &amp;quot;css&amp;quot; &amp;quot;sql&amp;quot; &amp;quot;go&amp;quot; &amp;quot;python&amp;quot; &amp;quot;julia&amp;quot; ## [41] &amp;quot;sass&amp;quot; &amp;quot;scss&amp;quot; &amp;quot;theorem&amp;quot; &amp;quot;lemma&amp;quot; &amp;quot;corollary&amp;quot; ## [46] &amp;quot;proposition&amp;quot; &amp;quot;conjecture&amp;quot; &amp;quot;definition&amp;quot; &amp;quot;example&amp;quot; &amp;quot;exercise&amp;quot; ## [51] &amp;quot;proof&amp;quot; &amp;quot;remark&amp;quot; &amp;quot;solution&amp;quot; And now python!</description>
     </item>
     
-    <item>
-      <title>Hello R Markdown</title>
-      <link>/post/2015/07/23/hello-r-markdown/</link>
-      <pubDate>Thu, 23 Jul 2015 21:13:14 -0500</pubDate>
-      
-      <guid>/post/2015/07/23/hello-r-markdown/</guid>
-      <description>R Markdown This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see http://rmarkdown.rstudio.com.
-You can embed an R code chunk like this:
-summary(cars) ## speed dist ## Min. : 4.0 Min. : 2.00 ## 1st Qu.:12.0 1st Qu.: 26.00 ## Median :15.0 Median : 36.00 ## Mean :15.4 Mean : 42.98 ## 3rd Qu.</description>
-    </item>
-    
   </channel>
 </rss>
