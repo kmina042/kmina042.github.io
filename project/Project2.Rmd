@@ -1,0 +1,258 @@
+---
+title: 'Project 2: Modeling, Testing, and Predicting'
+author: "SDS348"
+date: ''
+output:
+  html_document:
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+hook_output = knit_hooks$get('output')
+knit_hooks$set(output = function(x, options) {
+  # this hook is used only when the linewidth option is not NULL
+  if (!is.null(n <- options$linewidth)) {
+    x = knitr:::split_lines(x)
+    # any lines wider than n should be wrapped
+    if (any(nchar(x) > n)) x = strwrap(x, width = n)
+    x = paste(x, collapse = '\n')
+  }
+  hook_output(x, options)
+})
+
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE,fig.align="center",warning=FALSE,message=FALSE,fig.width=8, fig.height=5, linewidth=60)
+options(tibble.width = 100,width = 100)
+library(tidyverse)
+```
+
+## Mina Kim MLK2589
+## Modeling, Testing, and Predicting
+
+This project analyzes the "Stroke prediction dataset" provided by data scientist Federico Soriano. The dataset compiles 10 clinical features that may be associated with stroke for 5110 anonymized patients. As stroke is the 2nd leading cause of death worldwide and accounts for about 11% of deaths, analyzing this dataset for any possible associations could help improve clinical outcomes for this medical emergency. Since I'm a neuroscience major, finding how this neurological disease is affected by other clinical factors is also inherently interesting.
+
+The dataset has 5110 observations, each observation being a patient. There are 12 variables, one for the anonymized patient ID, and one a binary variable for a stroke event occuring. The other 10 variables are: gender (Male, Female, Other), age (years), hypertension (binary), heart_disease (binary), ever_married (Yes, No), work_type (children, govt_job, never_worked, private, self-employed), residence_type (rural, urban), avg_glucose_level, bmi, and smoking_status (formerly smoked, never smoked, smokes, unknown).
+
+```{r}
+library("tidyverse")
+library(dplyr)
+library(rstatix)
+library(modelr)
+library(tidyverse)
+library(gridExtra)
+library(sandwich)
+library(lmtest)
+
+stroke <- read.csv("~/SDS_348/healthcare-dataset-stroke-data.csv", na.strings = c("N/A"))
+stroke <- stroke %>% na.omit
+head(stroke)
+
+```
+
+
+## MANOVA testing
+
+```{r}
+group <- stroke$Residence_type
+DVs <- stroke %>% select(age,hypertension,heart_disease,avg_glucose_level,bmi,stroke)
+
+sapply(split(DVs,group), mshapiro_test)
+
+man <- manova(cbind(age,hypertension,heart_disease,avg_glucose_level,bmi,stroke)~Residence_type, data=stroke)
+summary(man)
+
+# Type I error
+1-(0.95)^31
+```
+The MANOVA test didn't yield a significant enough mean difference in my numeric variables (age, hypertension, heart disease, average glucose levels, bmi, and stroke) across levels of residence types. However, if the summary did show significance, I'd have my 1 MANOVA test, 6 univariate ANOVA tests, and 24 unique t tests for 31 tests total. The probability of a type 1 error occurring was calculated as 1-(0.95)^31 = 79.6%, and if I ran ANOVA, bonferroni would correct alpha to 0.05. MANOVA assumptions were not met.
+
+## Randomization tests
+
+```{r}
+stroke%>%group_by(stroke)%>%
+  summarise(means=mean(bmi))%>%summarise(`mean_diff`=diff(means))
+
+rand_dist<-vector() 
+
+for(i in 1:5000){
+new<-data.frame(bmi=sample(stroke$bmi),stroke=stroke$stroke) 
+rand_dist[i]<-mean(new[new$stroke=="1",]$bmi)-   
+              mean(new[new$stroke=="0",]$bmi)}
+
+{hist(rand_dist,main="",ylab=""); abline(v = c(-1.65, 1.65),col="red")}
+
+mean(rand_dist>1.65 | rand_dist< -1.65)
+```
+
+I randomized my data to test for a mean difference in BMIs between populations that have strokes and populations that don't. My null hypothesis states that there is no mean difference in BMIs between patients that do and don't have stroke, while my alternative hypothesis states there is a mean difference in BMIs between stroke and non-stroke patients. To test the mean difference, I found the mean difference test statistic is 1.65, and randomized the data. I plotted the randomized distribution and the statistic with red lines, and found the p value to be 0.0048. Because the p value is less than alpha = 0.05, I reject the null hypothesis and state there is a mean difference in BMIs across stroke and non-stroke populations.
+
+## Linear Regression
+
+```{r}
+stroke$avg_glucose_level_c <- stroke$avg_glucose_level - mean(stroke$avg_glucose_level)
+stroke$age_c <- stroke$age - mean(stroke$age)
+fit<-lm(avg_glucose_level_c ~ smoking_status*age_c, data=stroke)
+summary(fit)
+
+ggplot(stroke, aes(x=age_c, y=avg_glucose_level_c,group=smoking_status))+geom_point()+
+  geom_smooth(method="lm",se=F,fullrange=T,aes(color=smoking_status))
+
+resids<-fit$residuals
+par(mfrow = c(1, 2)); hist(resids); qqnorm(resids); qqline(resids, col = 'red')
+coeftest(fit, vcov = vcovHC(fit))
+```
+
+The mean predicted average glucose levels are -1.57 for former smokers and mean centered age, but was not found as significant. For each of the significant estimates, which is age and unknown smoking status accounting for age, the estimate provides the average increase in those factors with every 1 increase in average glucose levels. Around 6.1% of the proportion of the variation is explained by the model. Recomputing with robust standard error doesn't change any significant results. Judging by the plot, the fit violates homoskedasticity and the residuals show normality and linearity are violated.
+
+## Bootstrapped Linear Regression
+
+```{r}
+library(sandwich)
+library(lmtest)
+boot_dat<-stroke[sample(nrow(stroke),replace=TRUE),]
+
+
+samp_distn<-replicate(5000, {
+  boot_dat<-boot_dat<-stroke[sample(nrow(stroke),replace=TRUE),]
+  fit_2 <- lm(avg_glucose_level_c ~ smoking_status*age_c, data=boot_dat)
+  coef(fit_2)
+})
+
+## Estimated SEs
+samp_distn%>%t%>%as.data.frame%>%summarize_all(sd)
+
+```
+Bootstrapping didn't change the estimated SEs much, any variation can be attributed to the non-infinite running of samples.
+
+## Logistic Regression
+
+```{r}
+fit_3<-glm(stroke~bmi + age, data=stroke, family="binomial")
+coeftest(fit_3)
+exp(coef(fit_3))
+
+stroke <- stroke%>%mutate(prob=predict(fit_3, type= "response"), prediction=ifelse(prob>.5,1,0))
+table(predict=as.numeric(stroke$prob>.5),truth=stroke$stroke)%>%addmargins
+
+#accuracy
+4700/4909
+#TNR
+4700/4700
+
+stroke$logit <- predict(fit_3, type="link")
+stroke%>%ggplot()+geom_density(aes(logit,color=stroke,fill=stroke), alpha=.4)+
+  theme(legend.position=c(.85,.85))+geom_vline(xintercept=0)+xlab("logit (log-odds)")+
+  geom_rug(aes(logit,color=stroke))
+
+library(plotROC)
+
+classify<-stroke%>%transmute(prob,prediction,truth=stroke)
+ROCplot<-ggplot(classify)+ geom_roc(aes(d=truth,m=prob), n.cuts=0)
+ROCplot
+calc_auc(ROCplot)
+```
+
+I ran a logistic regression on the variables BMI and age on stroke occurence. For 0 BMI and 0 age, stroke occurence is at -7.94 which was found to be statistically significant. Additionally, age was also found to be a significant variable as 0 bmi and average age results in a 0.076 occurence of stroke. When reporting a confusion matrix, there weren't any predicted values of 1, so only the accuracy and TNR were calculated, although those values were pretty in line with the actual results with good accuracy ratings. AUC was calculated as 0.8365, which is pretty good.
+
+```{r}
+stroke <- stroke %>% mutate(y = ifelse(stroke == "1", 1,0))
+fit_all <-glm(stroke~., data=stroke, family = "binomial")
+prob2 <- predict(fit_all)
+coef(fit_all)
+exp(coef(fit_all))
+
+class_diag <- function(probs,truth){
+  #CONFUSION MATRIX: CALCULATE ACCURACY, TPR, TNR, PPV
+  tab<-table(factor(probs>.5,levels=c("FALSE","TRUE")),truth)
+  acc=sum(diag(tab))/sum(tab)
+  sens=tab[2,2]/colSums(tab)[2]
+  spec=tab[1,1]/colSums(tab)[1]
+  ppv=tab[2,2]/rowSums(tab)[2]
+  f1=2*(sens*ppv)/(sens+ppv)
+  
+  if(is.numeric(truth)==FALSE & is.logical(truth)==FALSE) truth<-as.numeric(truth)-1
+  
+  #CALCULATE EXACT AUC
+  ord<-order(probs, decreasing=TRUE)
+  probs <- probs[ord]; truth <- truth[ord]
+  
+  TPR=cumsum(truth)/max(1,sum(truth)) 
+  FPR=cumsum(!truth)/max(1,sum(!truth))
+  
+  dup<-c(probs[-1]>=probs[-length(probs)], FALSE)
+  TPR<-c(0,TPR[!dup],1); FPR<-c(0,FPR[!dup],1)
+  n <- length(TPR)
+  auc<- sum( ((TPR[-1]+TPR[-n])/2) * (FPR[-1]-FPR[-n]) )
+  
+  data.frame(acc,sens,spec,ppv,f1,auc)
+}
+
+truth = stroke$y
+class_diag(prob2, truth)
+
+#confusion matrix
+table(prediction=as.numeric(prob2>.5), truth)%>% addmargins()
+
+
+set.seed(1234)
+k=10
+
+data_CV<-stroke[sample(nrow(stroke)),] 
+folds<-cut(seq(1:nrow(stroke)),breaks=k,labels=F) 
+
+diags<-NULL
+for(i in 1:k){
+  train<-data_CV[folds!=i,]
+  test<-data_CV[folds==i,]
+  
+  truth1<-test$y
+  
+  fitCV1<- glm(y~.,data=train[,!colnames(train) %in% c("gender")],family="binomial")
+  
+  probs_CV<-predict(fitCV1,newdata = test,type="response")
+  
+  diags<-rbind(diags,class_diag(probs_CV,truth1))
+}
+
+
+summarize_all(diags,mean) 
+
+library(glmnet)
+set.seed(1234)
+
+x<-model.matrix(y ~ ., data=stroke)
+y<-data.matrix(stroke$y)
+
+cv<-cv.glmnet(x,y, family = "binomial")
+lasso<-glmnet(x,y,family="binomial",lambda=cv$lambda.1se)
+coef(lasso)
+
+set.seed(1234)
+k=10 #choose number of folds
+stroke_4<- stroke %>% sample_frac
+folds <- ntile(1:nrow(stroke_4),n=10)
+
+diags<-NULL 
+for(i in 1:k){
+  train<-stroke_4[folds!=i,] 
+  test<-stroke_4[folds==i,]
+  truth <- test$y
+  fit5<-glm(y~id, data=train, family="binomial") 
+  probs5 <- predict(fit5, newdata=test, type="response")
+  yhat<-predict(fit5,newdata=test)
+  diags<-rbind(diags,class_diag(probs5,truth))
+}
+diags%>%summarize_all(mean)
+```
+
+After fitting the model for all variables, I had an AUC of 1 which is very high. After CV, this value stayed the same, indicating that there isn't evidence of overfitting. Running lasso yielded only the ID variable that was selected for out of sample AUC, which after running AUC, yielded an AUC of 0.4624 which is very poor.
+
+...
+
+
+
+
+

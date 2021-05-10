@@ -1,0 +1,127 @@
+---
+title: 'Project 1: Exploratory Data Analysis'
+author: "Mina Kim, MLK2589"
+date: ''
+output:
+  html_document:
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
+  pdf_document:
+    toc: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE, fig.align = "center", warning = F, message = F,
+tidy=TRUE, tidy.opts=list(width.cutoff=60), R.options=list(max.print=100))
+```
+
+## Data Wrangling and Data Exploration
+
+This project analyzes two data sets, one from fivethirtyeight and the other from the Medicare division of the federal government. The fivethirtyeight dataset "hate_crimes", dated 2016, contains information on state population proportionality with respect to 2016 presidential voting, poverty, and more, along with the income inequality index(gini_index) and hate crimes per state. The medicaid dataset "medicaid_data", dated 2016, contains information on state-wise health expenditures across various categories like overtime pay, clinic staffing, and the state (State.Share) and federal share (Federal.Share) of those costs.
+
+I chose these datasets because I thought it was personally intriguing to explore how a state's population potentially influences its income inequality, hate crime incidents, and medicaid expenses. At first glance, these may seen like very disjointed variables, but I'm hypothesizing that I'll be able to find some makeup of the population correlate to Trump voting records, and that medicaid expenses would be related to income inequality as occupation is a social factor in determining health.
+
+### Tidying, Joining and Merging
+
+```{R}
+library("tidyverse")
+library("fivethirtyeight")
+library(dplyr)
+library(ggplot2)
+hate_crimes<-hate_crimes
+medicaid_data<-read.csv("https://data.medicaid.gov/api/views/7kua-37xz/rows.csv", header=T, stringsAsFactors = FALSE)
+head(hate_crimes)
+head(medicaid_data)
+
+finaldata<-hate_crimes%>%left_join(medicaid_data, by=c("state"="State"))
+head(finaldata)
+
+pivoting <- finaldata %>% pivot_wider(names_from="Program",values_from="Service.Category")
+```
+
+The data was already tidy so I just went and organized the program services in distinct columns using pivot_wider.
+
+A left join was used, using hate_crimes as the base, to combine datasets by distinct states. This method kept the 50 states analyzed in the hate_crimes dataset, while discarding the american territories that medicaid_data also included, since we only want the values who have points in both datasets. AFter the left join, the rows shrunk from 15511 rows in medicaid_data to 14126 rows in finaldata, as expected from eliminating american territories. American territories may have been omitted from the hate_crimes dataset because they are not culturally as influenced by American society compared to the states, and could have served as outliers if they were included.
+
+### Wrangling
+
+```{R}
+finaldata %>% summarize_if(is.numeric, list(mean = mean, sd = sd, min = min, max = max, n_distinct = n_distinct))
+finaldata1 <- finaldata %>% group_by(state, Program) %>% mutate(Sum.State.Share = sum(State.Share)) %>% ungroup
+finaldata1 %>% group_by(state) %>% select(-starts_with("Federal.Share.")) %>% summarize_if(is.numeric, list(mean=mean)) 
+finaldata1 %>% ungroup %>% group_by(Program) %>% select(-starts_with("Federal.Share.")) %>% summarize_if(is.numeric, list(mean=mean))
+finaldata2 <- finaldata1 %>% filter(Program == "Medical Assistance Program") %>% group_by(state) %>% summarize_if(is.numeric, list(mean = mean))
+summarytable <- finaldata2 %>% arrange(desc(State.Share_mean))
+print(summarytable)
+
+```
+
+The mean, standard deviation, maximum value, minimum value and distinct values for every numeric variable for states was calculated using summarize_if().  The total state share of health expenses for each state was calculated using the "mutate" function and "sum" function within that for the "State.Share" values grouped by state and program. After grouping by state and unselecting the types of federal expenditure (since many were NA and thus irrelevant), the mean of all variables were calculated. The same was then done, but this time grouped just by program. Finally, to analyze statistics just for the medical assistance programs in states, this category was used as a filter to then calculate the means for all numeric variables. The summary table was then arranged by descending total state share health expenditures to look at which states spent the most on healthcare. California was the biggest state spender on health expenditure, with a sum of $91919159345 spent.
+
+
+### Visualization
+
+```{R}
+cormat <- finaldata1 %>% select_if(is.numeric) %>% cor(use="pair")
+tidycor <- cormat %>% as.data.frame %>% rownames_to_column("var1") %>%  pivot_longer(-1,names_to="var2",values_to="correlation")
+arrange(tidycor, desc(correlation))
+tidycor %>% ggplot(aes(var1,var2,fill=correlation)) +  geom_tile() +
+  scale_fill_gradient2(low="red",mid="yellow",high="blue") + 
+  geom_text(aes(label=round(correlation,2)),color = "black", size = 1) + 
+  theme(axis.text.x = element_text(angle = 90, hjust=1)) +
+  coord_fixed()
+```
+
+The heat correlation maps shows there isn't a plethora of strong associations, though there are some moderate ones scattered through the variables. I focused on the weak correlations between the gini index and sum state health expenditures (0.36) and percentage of white poverty and Trump voting (0.55).
+
+```{R}
+ggplot(data = finaldata1, aes(gini_index, Sum.State.Share, color = state)) + geom_point() +
+  ggtitle("Income Inequality and Medicare Expenses by State") + 
+  xlab("Income Inequality Index") + ylab("Sum State Health Expenditures") +
+  geom_step(stat = "summary")
+```
+
+The scatterplot shows the values of the income inequality index and the sum medicare expenses (Sum.State.Share) graphed against each other by state.Visually we can see more and more states increase in income inequality when the state health costs increase. I hyppthesize this could be because a larger gap in income class means the state has a disproportional amount of people who are unable to afford private insurance.
+
+```{R}
+ggplot(data = finaldata1, aes(share_vote_trump, share_white_poverty, fill = state)) + geom_bar(stat = "summary") + 
+  ggtitle("Trump voter percentage and white poverty percentage by state") + 
+  xlab("Percent who voted for Trump") + ylab("Percent of white poverty") +
+  scale_color_continuous()
+```
+
+I also looked at a bar plot for voters who voted for Trump, and white poverty percentage by state. As the state's percentage of white poverty increases, so does the percentage of people who voted for Trump. I hypothesize this could be because of Trump's voter base which is largely blue collar white workers, and the rural areas that support Trump.
+
+### k-means PAM clustering
+
+```{R}
+library(cluster)
+library(plotly)
+clust_dat <- finaldata1 %>% dplyr::select(gini_index, Sum.State.Share, hate_crimes_per_100k_splc) %>% na.omit
+sil_width<-vector()
+for(i in 2:10){
+  kms <- kmeans(clust_dat,centers=i)  
+  sil <- silhouette(kms$cluster,dist(clust_dat))   
+  sil_width[i] <- mean(sil[,3])
+}
+ggplot()+geom_line(aes(x=1:10,y=sil_width))+scale_x_continuous(name="k",breaks=1:10)
+
+pam1 <- clust_dat %>% scale %>% pam(3)
+pam1
+final <- clust_dat %>% mutate(cluster = as.factor(pam1$clustering))
+final%>%plot_ly(x= ~gini_index,  y = ~Sum.State.Share, z = ~hate_crimes_per_100k_splc, color= ~cluster,        type = "scatter3d", mode = "markers") %>%  layout(autosize = F, width = 900, height = 400)
+
+
+```
+
+To use kmeans and PAM clustering, I first found the number of cluster I should use by using a for loop within a blank sil_width and graphing the results as a line plot to see which cluster had the highest average sil width. To determine the clusters, I used the 3 variables of gini index, sum state health expenditures, and hate crimes per state.
+I then used that to conduct a PAM cluster function by adding the cluster through a mutate function and plotting the three variables in a 3d, tri variable graph using plot_ly to visualize the clusters. The 3 clusters were largely concentrated towards low income inequality, sum state health expenditures and hate crimes, but the third cluster had some outliers with relatively high rates of each.
+
+...
+
+
+
+
+
