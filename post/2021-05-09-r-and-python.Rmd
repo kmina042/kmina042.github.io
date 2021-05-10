@@ -1,0 +1,75 @@
+---
+title: R and Python
+author: Mina Kim
+date: '2021-05-09'
+slug: r-and-python
+categories: []
+tags: []
+description: ''
+---
+
+![Two very important languages!](/post/2021-05-09-r-and-python_files/randpython.jpg)
+
+When it comes to coding, there's 2 major languages we need to know: R and python. But knowing one doesn't mean we can just ignore the other--it's best if we can interact with the two at once. This can be done through the reticulate package. Here we have two code chunk for each language.
+
+R:
+
+```{r}
+names(knitr::knit_engines$get())
+```
+
+And now python!
+
+```{python}
+hw = "hello world"
+hw[0:11]
+```
+
+Now that we've done a bit of each language, let's combine them with reticulate.
+
+```{R}
+#R code chunk
+library(reticulate)
+matplotlib <- import("matplotlib")
+matplotlib$use("Agg", force = TRUE)
+
+hi<-"Welcome"
+```
+
+```{python}
+#Python code chunk
+hi="to reticulate!"
+print(r.hi,hi) #access R-defined objects with r. 
+```
+
+```{R}
+#R code chunk
+cat(c(hi,py$hi)) #access Python-defined objects with py$
+
+```
+
+
+What if we want to plot some graphs?
+
+
+```{python}
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas
+
+
+x=np.random.normal(0,1,100) 
+y=np.random.normal(0,1,100)
+
+plt.scatter(x,y)
+```
+
+Here we can do a ggplot with R too.![](/post/2021-05-09-r-and-python_files/randpython.jpg)
+
+```{R}
+library(ggplot2)
+ggplot()+geom_point(aes(py$x,py$y))
+```
+
+
+
